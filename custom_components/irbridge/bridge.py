@@ -27,7 +27,12 @@ from .const import (
     MQTT_TOPIC_TEMPLATE,
     SETUP_MODE_CODEPACK,
 )
-from .codepacks import COMMAND_ALIASES, load_codepack, resolve_codepack_command
+from .codepacks import (
+    COMMAND_ALIASES,
+    COMPATIBILITY_TYPE_MQTT_RAW,
+    load_codepack,
+    resolve_codepack_command,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -180,11 +185,25 @@ class IRBridgeDevice:
             )
         return stored_code
 
+    async def async_build_payload(self, command: str) -> str:
+        """Build the MQTT payload for a command."""
+        stored_code = await self.async_resolve_command(command)
+        if self.is_codepack_mode and self._codepack_data is not None:
+            compatibility_type = self._codepack_data.get("_irbridge_compatibility_type")
+            if compatibility_type == COMPATIBILITY_TYPE_MQTT_RAW:
+                try:
+                    parsed_payload = json.loads(stored_code)
+                except json.JSONDecodeError:
+                    parsed_payload = None
+                if isinstance(parsed_payload, dict):
+                    return json.dumps(parsed_payload)
+
+        return json.dumps({MQTT_PAYLOAD_KEY: stored_code})
+
     async def async_send_command(self, command: str) -> None:
         """Publish a stored IR command to the configured MQTT topic."""
         normalized_command = command.strip()
-        stored_code = await self.async_resolve_command(normalized_command)
-        payload = json.dumps({MQTT_PAYLOAD_KEY: stored_code})
+        payload = await self.async_build_payload(normalized_command)
         _LOGGER.debug(
             "Sending IRBridge command",
             extra={
