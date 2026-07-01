@@ -1,0 +1,30 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Create virtual IR device",
+        "description": "Configure a local MQTT-backed infrared device.",
+        "data": {
+          "virtual_name": "Virtual device name",
+          "friendly_name": "Zigbee2MQTT friendly name",
+          "mqtt_topic": "MQTT set topic",
+          "device_type": "Device type",
+          "power": "Power IR code",
+          "volume_up": "Volume up IR code",
+          "volume_down": "Volume down IR code",
+          "mute": "Mute IR code"
+        },
+        "data_description": {
+          "friendly_name": "Used to build zigbee2mqtt/<friendly_name>/set when no explicit topic is provided.",
+          "mqtt_topic": "Optional override for non-standard topics."
+        }
+      }
+    },
+    "error": {
+      "friendly_name_or_topic_required": "Enter either a Zigbee2MQTT friendly name or an MQTT topic."
+    },
+    "abort": {
+      "already_configured": "This IRBridge device is already configured."
+    }
+  }
+}

@@ -1,0 +1,18 @@
+send_command:
+  name: Send command
+  description: Send a stored IR command through an IRBridge virtual device.
+  fields:
+    device:
+      name: Device
+      description: IRBridge virtual device name, Zigbee2MQTT friendly name, or config entry ID.
+      required: true
+      example: Living Room TV
+      selector:
+        text:
+    command:
+      name: Command
+      description: Stored command name to send.
+      required: true
+      example: power
+      selector:
+        text:
