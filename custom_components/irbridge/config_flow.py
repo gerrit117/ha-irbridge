@@ -9,16 +9,25 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.helpers import selector
 
+from .codepacks import CodepackInfo, build_codepack_index, discover_codepacks
 from .const import (
+    CODEPACK_DEVICE_TYPES,
+    CONF_CODEPACK_DEVICE_TYPE,
+    CONF_CODEPACK_ID,
+    CONF_CODEPACK_MANUFACTURER,
     CONF_COMMANDS,
     CONF_DEVICE_TYPE,
     CONF_FRIENDLY_NAME,
     CONF_MQTT_TOPIC,
+    CONF_SETUP_MODE,
     CONF_VIRTUAL_NAME,
     DEFAULT_COMMANDS,
     DEVICE_TYPES,
     DOMAIN,
     MQTT_TOPIC_TEMPLATE,
+    SETUP_MODE_CODEPACK,
+    SETUP_MODE_MANUAL,
+    SETUP_MODES,
 )
 
 
@@ -26,11 +35,15 @@ class IRBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle an IRBridge config flow."""
 
     VERSION = 1
+    _common_data: dict[str, Any]
+    _codepack_device_type: str
+    _codepack_manufacturer: str
+    _codepack_index: dict[str, dict[str, list[CodepackInfo]]] | None = None
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Create an IRBridge virtual device."""
+        """Collect common IRBridge virtual device settings."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -41,26 +54,22 @@ class IRBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if not friendly_name and not mqtt_topic:
                 errors["base"] = "friendly_name_or_topic_required"
             else:
-                await self.async_set_unique_id(
-                    mqtt_topic or MQTT_TOPIC_TEMPLATE.format(friendly_name=friendly_name)
+                topic = mqtt_topic or MQTT_TOPIC_TEMPLATE.format(
+                    friendly_name=friendly_name
                 )
+                await self.async_set_unique_id(f"{topic}:{virtual_name}")
                 self._abort_if_unique_id_configured()
 
-                commands = {
-                    command: str(user_input.get(command, "")).strip()
-                    for command in DEFAULT_COMMANDS
+                self._common_data = {
+                    CONF_VIRTUAL_NAME: virtual_name,
+                    CONF_FRIENDLY_NAME: friendly_name,
+                    CONF_MQTT_TOPIC: mqtt_topic,
+                    CONF_SETUP_MODE: user_input[CONF_SETUP_MODE],
                 }
 
-                return self.async_create_entry(
-                    title=virtual_name,
-                    data={
-                        CONF_VIRTUAL_NAME: virtual_name,
-                        CONF_FRIENDLY_NAME: friendly_name,
-                        CONF_MQTT_TOPIC: mqtt_topic,
-                        CONF_DEVICE_TYPE: user_input[CONF_DEVICE_TYPE],
-                        CONF_COMMANDS: commands,
-                    },
-                )
+                if user_input[CONF_SETUP_MODE] == SETUP_MODE_CODEPACK:
+                    return await self.async_step_codepack_type()
+                return await self.async_step_manual()
 
         return self.async_show_form(
             step_id="user",
@@ -69,6 +78,41 @@ class IRBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     vol.Required(CONF_VIRTUAL_NAME): str,
                     vol.Optional(CONF_FRIENDLY_NAME, default=""): str,
                     vol.Optional(CONF_MQTT_TOPIC, default=""): str,
+                    vol.Required(CONF_SETUP_MODE, default=SETUP_MODE_MANUAL): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=SETUP_MODES,
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    ),
+                }
+            ),
+            errors=errors,
+        )
+
+    async def async_step_manual(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Collect manual command mappings."""
+        if user_input is not None:
+            commands = {
+                command: str(user_input.get(command, "")).strip()
+                for command in DEFAULT_COMMANDS
+            }
+
+            data = {
+                **self._common_data,
+                CONF_DEVICE_TYPE: user_input[CONF_DEVICE_TYPE],
+                CONF_COMMANDS: commands,
+            }
+            return self.async_create_entry(
+                title=self._common_data[CONF_VIRTUAL_NAME],
+                data=data,
+            )
+
+        return self.async_show_form(
+            step_id="manual",
+            data_schema=vol.Schema(
+                {
                     vol.Required(CONF_DEVICE_TYPE, default=DEVICE_TYPES[0]): selector.SelectSelector(
                         selector.SelectSelectorConfig(
                             options=DEVICE_TYPES,
@@ -81,5 +125,116 @@ class IRBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     vol.Optional("mute", default=""): str,
                 }
             ),
-            errors=errors,
         )
+
+    async def async_step_codepack_type(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Select a bundled codepack device type."""
+        index = await self._async_get_codepack_index()
+        available_types = [
+            device_type for device_type in CODEPACK_DEVICE_TYPES if device_type in index
+        ]
+        if not available_types:
+            return self.async_abort(reason="no_codepacks")
+
+        if user_input is not None:
+            self._codepack_device_type = user_input[CONF_CODEPACK_DEVICE_TYPE]
+            return await self.async_step_codepack_manufacturer()
+
+        return self.async_show_form(
+            step_id="codepack_type",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_CODEPACK_DEVICE_TYPE, default=available_types[0]
+                    ): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=available_types,
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    )
+                }
+            ),
+        )
+
+    async def async_step_codepack_manufacturer(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Select a bundled codepack manufacturer."""
+        index = await self._async_get_codepack_index()
+        manufacturers = sorted(index.get(self._codepack_device_type, {}))
+        if not manufacturers:
+            return self.async_abort(reason="no_codepacks")
+
+        if user_input is not None:
+            self._codepack_manufacturer = user_input[CONF_CODEPACK_MANUFACTURER]
+            return await self.async_step_codepack_model()
+
+        return self.async_show_form(
+            step_id="codepack_manufacturer",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_CODEPACK_MANUFACTURER, default=manufacturers[0]
+                    ): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=manufacturers,
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    )
+                }
+            ),
+        )
+
+    async def async_step_codepack_model(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Select a bundled codepack model/code id."""
+        index = await self._async_get_codepack_index()
+        codepacks = index[self._codepack_device_type][self._codepack_manufacturer]
+        options = [
+            {"value": codepack.codepack_id, "label": codepack.label}
+            for codepack in codepacks
+        ]
+
+        if user_input is not None:
+            selected = next(
+                codepack
+                for codepack in codepacks
+                if codepack.codepack_id == user_input[CONF_CODEPACK_ID]
+            )
+            data = {
+                **self._common_data,
+                CONF_DEVICE_TYPE: self._codepack_device_type,
+                CONF_CODEPACK_DEVICE_TYPE: selected.device_type,
+                CONF_CODEPACK_MANUFACTURER: selected.manufacturer,
+                CONF_CODEPACK_ID: selected.codepack_id,
+            }
+            return self.async_create_entry(
+                title=self._common_data[CONF_VIRTUAL_NAME],
+                data=data,
+            )
+
+        return self.async_show_form(
+            step_id="codepack_model",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_CODEPACK_ID): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=options,
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    )
+                }
+            ),
+        )
+
+    async def _async_get_codepack_index(
+        self,
+    ) -> dict[str, dict[str, list[CodepackInfo]]]:
+        """Return the bundled codepack index."""
+        if self._codepack_index is None:
+            codepacks = await self.hass.async_add_executor_job(discover_codepacks)
+            self._codepack_index = build_codepack_index(codepacks)
+        return self._codepack_index

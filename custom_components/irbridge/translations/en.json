@@ -8,15 +8,43 @@
           "virtual_name": "Virtual device name",
           "friendly_name": "Zigbee2MQTT friendly name",
           "mqtt_topic": "MQTT set topic",
+          "setup_mode": "Setup mode"
+        },
+        "data_description": {
+          "friendly_name": "Used to build zigbee2mqtt/<friendly_name>/set when no explicit topic is provided.",
+          "mqtt_topic": "Optional override for non-standard topics."
+        }
+      },
+      "manual": {
+        "title": "Manual commands",
+        "description": "Enter IR codes directly for this virtual device.",
+        "data": {
           "device_type": "Device type",
           "power": "Power IR code",
           "volume_up": "Volume up IR code",
           "volume_down": "Volume down IR code",
           "mute": "Mute IR code"
-        },
-        "data_description": {
-          "friendly_name": "Used to build zigbee2mqtt/<friendly_name>/set when no explicit topic is provided.",
-          "mqtt_topic": "Optional override for non-standard topics."
+        }
+      },
+      "codepack_type": {
+        "title": "Bundled codepack type",
+        "description": "Choose the type of bundled SmartIR-compatible codepack to use.",
+        "data": {
+          "codepack_device_type": "Device type"
+        }
+      },
+      "codepack_manufacturer": {
+        "title": "Bundled codepack manufacturer",
+        "description": "Choose the manufacturer from bundled codepacks.",
+        "data": {
+          "codepack_manufacturer": "Manufacturer"
+        }
+      },
+      "codepack_model": {
+        "title": "Bundled codepack model",
+        "description": "Choose the SmartIR-compatible code ID/model.",
+        "data": {
+          "codepack_id": "Model/code ID"
         }
       }
     },
@@ -24,7 +52,8 @@
       "friendly_name_or_topic_required": "Enter either a Zigbee2MQTT friendly name or an MQTT topic."
     },
     "abort": {
-      "already_configured": "This IRBridge device is already configured."
+      "already_configured": "This IRBridge device is already configured.",
+      "no_codepacks": "No valid bundled codepacks were found."
     }
   }
 }

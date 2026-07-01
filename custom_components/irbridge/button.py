@@ -18,9 +18,10 @@ async def async_setup_entry(
 ) -> None:
     """Set up IRBridge command button entities."""
     bridge_device: IRBridgeDevice = hass.data[DOMAIN][entry.entry_id]
+    commands = await bridge_device.async_available_commands()
     async_add_entities(
         IRBridgeCommandButtonEntity(bridge_device, command)
-        for command in bridge_device.commands
+        for command in commands
     )
 
 

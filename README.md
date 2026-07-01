@@ -38,6 +38,7 @@ Version 0.1 provides:
 - `irbridge.send_command` service
 - MQTT publishing to Zigbee2MQTT-style IR blasters
 - Local config entry storage for command mappings
+- Optional bundled SmartIR-compatible codepack selection
 
 Configurable commands in v0.1:
 
@@ -83,6 +84,49 @@ Payload:
 
 You can override the MQTT topic in the config flow if your backend uses a different topic.
 
+## SmartIR-Compatible Codepacks
+
+IRBridge can use bundled SmartIR-style JSON codepacks from:
+
+```text
+custom_components/irbridge/codepacks/
+```
+
+Folder format:
+
+```text
+custom_components/irbridge/codepacks/
+  climate/
+    1000.json
+  media_player/
+    1000.json
+  fan/
+    1000.json
+  light/
+    1000.json
+```
+
+Each JSON file must include these basic fields:
+
+```json
+{
+  "manufacturer": "Example",
+  "supportedModels": ["Example Model"],
+  "commandsEncoding": "Base64",
+  "supportedController": "Broadlink",
+  "commands": {
+    "on": "...",
+    "off": "..."
+  }
+}
+```
+
+When using a bundled codepack, IRBridge stores only the selected codepack type and code ID in the config entry. Commands are loaded from the bundled JSON file at runtime.
+
+The current bundled database is SmartIR-compatible and mostly uses Broadlink Base64 command strings. IRBridge currently forwards those stored strings as-is to the configured MQTT IR backend using `ir_code_to_send`.
+
+Simple command aliases are supported for service calls, including `on`, `off`, `power`, `volumeUp`, `volumeDown`, `volume_up`, `volume_down`, and `mute`.
+
 ## Service Example
 
 ```yaml
@@ -100,6 +144,8 @@ The `device` field accepts the virtual device name, Zigbee2MQTT friendly name, o
 - No SmartIR importing yet
 - No real device feedback
 - Assumed state only
+- Codepack commands are assumed to be compatible with your Zigbee2MQTT IR blaster payload format
+- Bundled SmartIR codepacks are currently treated as Broadlink Base64 payloads and are not converted
 - Climate and media player device types are stored for future use but do not create full `ClimateEntity` or `MediaPlayerEntity` platforms yet
 
 ## Roadmap

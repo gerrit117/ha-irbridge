@@ -51,14 +51,14 @@ class IRBridgeRemoteEntity(RemoteEntity):
     async def async_turn_on(
         self, activity: str | None = None, **kwargs: Any
     ) -> None:
-        """Send the configured power command."""
-        await self._bridge_device.async_send_command("power")
+        """Send the configured on command."""
+        await self._bridge_device.async_send_command("on")
 
     async def async_turn_off(
         self, activity: str | None = None, **kwargs: Any
     ) -> None:
-        """Send the configured power command."""
-        await self._bridge_device.async_send_command("power")
+        """Send the configured off command."""
+        await self._bridge_device.async_send_command("off")
 
     async def async_toggle(
         self, activity: str | None = None, **kwargs: Any
