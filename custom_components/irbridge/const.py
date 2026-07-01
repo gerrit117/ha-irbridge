@@ -8,7 +8,7 @@ DOMAIN: Final = "irbridge"
 NAME: Final = "IRBridge"
 VERSION: Final = "0.1.0"
 
-PLATFORMS: Final = ["remote", "button"]
+PLATFORMS: Final = ["remote", "button", "climate"]
 
 CONF_COMMANDS: Final = "commands"
 CONF_CODEPACK_DEVICE_TYPE: Final = "codepack_device_type"

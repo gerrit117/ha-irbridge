@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from itertools import permutations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -48,6 +49,14 @@ COMMAND_ALIASES: dict[str, tuple[str, ...]] = {
     "mute": ("mute",),
 }
 
+CLIMATE_MODE_ALIASES: dict[str, tuple[str, ...]] = {
+    "cool": ("cool",),
+    "heat": ("heat",),
+    "dry": ("dry",),
+    "fan_only": ("fan_only", "fan"),
+    "auto": ("auto", "heat_cool"),
+}
+
 
 @dataclass(frozen=True, slots=True)
 class CodepackInfo:
@@ -76,6 +85,23 @@ class CodepackInfo:
     def ref(self) -> str:
         """Return the stable bundled codepack reference."""
         return f"{self.device_type}/{self.codepack_id}"
+
+
+@dataclass(frozen=True, slots=True)
+class ClimateCodepack:
+    """Parsed SmartIR climate codepack metadata."""
+
+    manufacturer: str
+    supported_models: tuple[str, ...]
+    min_temperature: float
+    max_temperature: float
+    precision: float
+    default_temperature: float | None
+    operation_modes: tuple[str, ...]
+    fan_modes: tuple[str, ...]
+    swing_modes: tuple[str, ...]
+    commands: dict[str, Any]
+    has_temperature_commands: bool
 
 
 def is_codepack_path(path: Path) -> bool:
@@ -281,6 +307,196 @@ def load_codepack(device_type: str, codepack_id: str) -> dict[str, Any]:
     return data
 
 
+def _as_float(value: Any, default: float) -> float:
+    """Return a float value or a default."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _as_string_tuple(value: Any) -> tuple[str, ...]:
+    """Return a tuple of strings from a SmartIR metadata list."""
+    if not isinstance(value, list):
+        return ()
+    return tuple(str(item) for item in value if str(item).strip())
+
+
+def _has_numeric_leaf(node: Any) -> bool:
+    """Return whether a command tree appears to contain temperature keys."""
+    if not isinstance(node, dict):
+        return False
+    for key, value in node.items():
+        try:
+            float(str(key))
+        except ValueError:
+            pass
+        else:
+            if isinstance(value, str):
+                return True
+        if _has_numeric_leaf(value):
+            return True
+    return False
+
+
+def _tree_contains_key(node: Any, expected_key: str) -> bool:
+    """Return whether a nested command tree contains a key."""
+    if not isinstance(node, dict):
+        return False
+    for key, value in node.items():
+        if str(key) == expected_key:
+            return True
+        if _tree_contains_key(value, expected_key):
+            return True
+    return False
+
+
+def parse_climate_codepack(data: dict[str, Any]) -> ClimateCodepack:
+    """Parse SmartIR climate codepack metadata with safe defaults."""
+    commands = data.get("commands")
+    if not isinstance(commands, dict):
+        raise HomeAssistantError("Climate codepack commands must be an object")
+
+    min_temperature = _as_float(data.get("minTemperature"), 16.0)
+    max_temperature = _as_float(data.get("maxTemperature"), 30.0)
+    precision = _as_float(data.get("precision"), 1.0)
+    default_temperature = (
+        _as_float(data["defaultTemperature"], min_temperature)
+        if "defaultTemperature" in data
+        else None
+    )
+    operation_modes = _as_string_tuple(data.get("operationModes"))
+    if not operation_modes:
+        operation_modes = tuple(
+            command for command, value in commands.items() if isinstance(value, dict)
+        )
+    fan_modes = _as_string_tuple(data.get("fanModes"))
+    swing_modes = _as_string_tuple(data.get("swingModes"))
+    supported_models = _as_string_tuple(data.get("supportedModels"))
+    if not supported_models:
+        supported_models = ("Unknown",)
+
+    return ClimateCodepack(
+        manufacturer=str(data.get("manufacturer") or "Unknown"),
+        supported_models=supported_models,
+        min_temperature=min_temperature,
+        max_temperature=max_temperature,
+        precision=precision,
+        default_temperature=default_temperature,
+        operation_modes=operation_modes,
+        fan_modes=fan_modes,
+        swing_modes=swing_modes,
+        commands=commands,
+        has_temperature_commands=_has_numeric_leaf(commands),
+    )
+
+
+def _temperature_key_candidates(temperature: float | None) -> tuple[str, ...]:
+    """Return SmartIR temperature key candidates."""
+    if temperature is None:
+        return ()
+    candidates: list[str] = []
+    numeric_temperature = float(temperature)
+    if numeric_temperature.is_integer():
+        candidates.append(str(int(numeric_temperature)))
+    candidates.append(str(numeric_temperature))
+    candidates.append(f"{numeric_temperature:.1f}")
+    return tuple(dict.fromkeys(candidates))
+
+
+def _matching_key(node: dict[str, Any], candidates: tuple[str, ...]) -> str | None:
+    """Return the first key in node matching one of the candidates."""
+    if not candidates:
+        return None
+    normalized = {str(key): key for key in node}
+    for candidate in candidates:
+        if candidate in normalized:
+            return normalized[candidate]
+    return None
+
+
+def _resolve_path(node: Any, dimensions: tuple[tuple[str, ...], ...]) -> str | None:
+    """Resolve nested command data using a dimension candidate path."""
+    current = node
+    for candidates in dimensions:
+        if isinstance(current, str):
+            return current
+        if not isinstance(current, dict):
+            return None
+        key = _matching_key(current, candidates)
+        if key is None:
+            return None
+        current = current[key]
+    return current if isinstance(current, str) else None
+
+
+def resolve_climate_command(
+    data: dict[str, Any],
+    operation_mode: str,
+    target_temperature: float | None,
+    fan_mode: str | None,
+    swing_mode: str | None,
+) -> str:
+    """Resolve a nested SmartIR climate command."""
+    climate = parse_climate_codepack(data)
+    commands = climate.commands
+
+    if operation_mode == "off":
+        off_command = commands.get("off")
+        if isinstance(off_command, str):
+            return off_command
+        raise HomeAssistantError("Climate codepack does not define an off command")
+
+    operation_candidates = CLIMATE_MODE_ALIASES.get(operation_mode, (operation_mode,))
+    operation_key = _matching_key(commands, operation_candidates)
+    if operation_key is None:
+        raise HomeAssistantError(
+            f"Climate codepack does not define operation mode '{operation_mode}'"
+        )
+
+    operation_node = commands[operation_key]
+    if isinstance(operation_node, str):
+        return operation_node
+
+    selected_fan_mode = fan_mode or (climate.fan_modes[0] if climate.fan_modes else None)
+    selected_swing_mode = swing_mode or (
+        climate.swing_modes[0] if climate.swing_modes else None
+    )
+    fan_candidates = (selected_fan_mode,) if selected_fan_mode else ()
+    swing_candidates = (selected_swing_mode,) if selected_swing_mode else ()
+    temperature_candidates = _temperature_key_candidates(target_temperature)
+
+    required_dimensions: list[tuple[str, ...]] = []
+    if fan_candidates and _tree_contains_key(operation_node, fan_candidates[0]):
+        required_dimensions.append(fan_candidates)
+    if swing_candidates and _tree_contains_key(operation_node, swing_candidates[0]):
+        required_dimensions.append(swing_candidates)
+    if temperature_candidates and _has_numeric_leaf(operation_node):
+        required_dimensions.append(temperature_candidates)
+
+    paths = list(permutations(required_dimensions))
+
+    for path in paths:
+        resolved = _resolve_path(operation_node, path)
+        if resolved is not None:
+            return resolved
+
+    _LOGGER.error(
+        "Unable to resolve climate command",
+        extra={
+            "operation_mode": operation_mode,
+            "target_temperature": target_temperature,
+            "fan_mode": fan_mode,
+            "swing_mode": swing_mode,
+        },
+    )
+    raise HomeAssistantError(
+        "No matching climate command for "
+        f"mode={operation_mode}, temperature={target_temperature}, "
+        f"fan={fan_mode}, swing={swing_mode}"
+    )
+
+
 def resolve_codepack_command(
     data: dict[str, Any], command: str, device_type: str
 ) -> str | None:
@@ -290,8 +506,7 @@ def resolve_codepack_command(
         return None
 
     if device_type == "climate":
-        # Climate codepacks are nested by HVAC mode, temperature, fan mode, and swing.
-        # TODO: Implement full climate command resolution with ClimateEntity support.
+        # ClimateEntity uses resolve_climate_command for nested mode/fan/swing/temp.
         return commands.get(command) if isinstance(commands.get(command), str) else None
 
     candidates = COMMAND_ALIASES.get(command, (command,))

@@ -35,6 +35,7 @@ Version 0.1 provides:
 - UI config flow
 - One virtual remote entity per config entry
 - Button entities for configured commands
+- ClimateEntity support for bundled SmartIR climate codepacks
 - `irbridge.send_command` service
 - MQTT publishing to Zigbee2MQTT-style IR blasters
 - Local config entry storage for command mappings
@@ -137,6 +138,40 @@ For MQTT Raw packs whose command value is already a JSON payload string, IRBridg
 
 Simple command aliases are supported for service calls, including `on`, `off`, `power`, `volumeUp`, `volumeDown`, `volume_up`, `volume_down`, and `mute`.
 
+## Climate Codepacks
+
+When you select a bundled `climate` codepack, IRBridge creates a real Home Assistant `ClimateEntity` for the virtual air conditioner.
+
+IRBridge reads SmartIR climate fields when present:
+
+- `minTemperature`
+- `maxTemperature`
+- `precision`
+- `operationModes`
+- `fanModes`
+- `swingModes`
+- `commands`
+
+Climate commands are resolved from SmartIR-style nested command trees, such as mode -> fan -> swing -> temperature. Temperature keys may be strings or numbers. If a fan or swing mode is needed but the exact command is missing, IRBridge raises an error instead of sending a guessed command.
+
+IR-controlled devices usually provide no feedback. Climate entities therefore use assumed state and restore the last known mode, target temperature, fan mode, and swing mode after Home Assistant restarts.
+
+### Climate Test Procedure
+
+1. Call `climate.turn_off` and confirm the air conditioner turns off.
+2. Set HVAC mode to `cool` with a supported temperature.
+3. Change the target temperature by one supported step.
+4. Change fan mode if the codepack exposes fan modes.
+5. Change swing mode if the codepack exposes swing modes.
+
+### Troubleshooting Climate Commands
+
+- Confirm the selected codepack has an `off` command.
+- Confirm the selected HVAC mode exists in `operationModes` and `commands`.
+- Confirm the target temperature exists in the nested command tree.
+- Confirm the selected fan/swing mode exists for that HVAC mode and temperature.
+- MQTT Raw codepacks must contain command payload strings that are valid JSON if they should be published directly.
+
 ## Service Example
 
 ```yaml
@@ -165,7 +200,7 @@ If a device is not discovered, choose `Manual MQTT topic` and enter either the Z
 - Codepack commands must be compatible with your Zigbee2MQTT IR blaster payload format
 - IRBridge does not yet convert between Broadlink Base64, Pronto, ESPHome raw, and Tuya/Zigbee2MQTT raw formats
 - Registry discovery uses heuristics and may miss unusually named IR blasters
-- Climate and media player device types are stored for future use but do not create full `ClimateEntity` or `MediaPlayerEntity` platforms yet
+- Media player, fan, and light codepack device types are stored for future use but do not create full entity platforms yet
 
 ## Roadmap
 

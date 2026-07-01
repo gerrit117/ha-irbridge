@@ -188,6 +188,10 @@ class IRBridgeDevice:
     async def async_build_payload(self, command: str) -> str:
         """Build the MQTT payload for a command."""
         stored_code = await self.async_resolve_command(command)
+        return self.build_payload_for_code(stored_code)
+
+    def build_payload_for_code(self, stored_code: str) -> str:
+        """Build the MQTT payload for a stored IR code."""
         if self.is_codepack_mode and self._codepack_data is not None:
             compatibility_type = self._codepack_data.get("_irbridge_compatibility_type")
             if compatibility_type == COMPATIBILITY_TYPE_MQTT_RAW:
@@ -199,6 +203,19 @@ class IRBridgeDevice:
                     return json.dumps(parsed_payload)
 
         return json.dumps({MQTT_PAYLOAD_KEY: stored_code})
+
+    async def async_send_ir_code(self, stored_code: str) -> None:
+        """Publish a resolved IR code to the configured MQTT topic."""
+        payload = self.build_payload_for_code(stored_code)
+        _LOGGER.debug(
+            "Sending resolved IRBridge IR code",
+            extra={
+                "entry_id": self.entry.entry_id,
+                "device": self.name,
+                "topic": self.topic,
+            },
+        )
+        await mqtt.async_publish(self.hass, self.topic, payload, qos=0, retain=False)
 
     async def async_send_command(self, command: str) -> None:
         """Publish a stored IR command to the configured MQTT topic."""
