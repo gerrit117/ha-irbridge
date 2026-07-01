@@ -106,7 +106,7 @@ custom_components/irbridge/codepacks/
     1000.json
 ```
 
-Each JSON file must include these basic fields:
+Each JSON file must include a `commands` object. IRBridge also reads SmartIR metadata when present:
 
 ```json
 {
@@ -123,7 +123,17 @@ Each JSON file must include these basic fields:
 
 When using a bundled codepack, IRBridge stores only the selected codepack type and code ID in the config entry. Commands are loaded from the bundled JSON file at runtime.
 
-The current bundled database is SmartIR-compatible and mostly uses Broadlink Base64 command strings. IRBridge currently forwards those stored strings as-is to the configured MQTT IR backend using `ir_code_to_send`.
+The bundled database is SmartIR-compatible and includes multiple controller/encoding variants, including Broadlink Base64, MQTT Raw, ESPHome Raw, Xiaomi Raw, LOOKin Raw, and Pronto-style packs. IRBridge normalizes these internally with compatibility types such as `broadlink_base64`, `mqtt_raw`, `z2m_base64`, and `esphome_raw`.
+
+For Broadlink/Base64-style packs, IRBridge publishes:
+
+```json
+{
+  "ir_code_to_send": "<stored_code>"
+}
+```
+
+For MQTT Raw packs whose command value is already a JSON payload string, IRBridge publishes that payload directly.
 
 Simple command aliases are supported for service calls, including `on`, `off`, `power`, `volumeUp`, `volumeDown`, `volume_up`, `volume_down`, and `mute`.
 
@@ -138,14 +148,23 @@ data:
 
 The `device` field accepts the virtual device name, Zigbee2MQTT friendly name, or config entry ID.
 
+## Zigbee2MQTT IR Blaster Discovery
+
+During setup, IRBridge looks at the Home Assistant device and entity registries for MQTT/Zigbee2MQTT devices that look like local IR blasters. Known device hints include TS1201, ZS06, UFO-R11, infrared, IR, remote, blaster, `ir_code_to_send`, `learn_ir_code`, and `learned_ir_code`.
+
+The registry is only used for discovery and better setup UX. IRBridge still sends commands by publishing directly to MQTT.
+
+If a device is not discovered, choose `Manual MQTT topic` and enter either the Zigbee2MQTT friendly name or the full MQTT set topic.
+
 ## Current Limitations
 
 - No IR learning UI yet
 - No SmartIR importing yet
 - No real device feedback
 - Assumed state only
-- Codepack commands are assumed to be compatible with your Zigbee2MQTT IR blaster payload format
-- Bundled SmartIR codepacks are currently treated as Broadlink Base64 payloads and are not converted
+- Codepack commands must be compatible with your Zigbee2MQTT IR blaster payload format
+- IRBridge does not yet convert between Broadlink Base64, Pronto, ESPHome raw, and Tuya/Zigbee2MQTT raw formats
+- Registry discovery uses heuristics and may miss unusually named IR blasters
 - Climate and media player device types are stored for future use but do not create full `ClimateEntity` or `MediaPlayerEntity` platforms yet
 
 ## Roadmap

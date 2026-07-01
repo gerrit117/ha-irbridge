@@ -16,6 +16,8 @@ CONF_CODEPACK_ID: Final = "codepack_id"
 CONF_CODEPACK_MANUFACTURER: Final = "codepack_manufacturer"
 CONF_DEVICE_TYPE: Final = "device_type"
 CONF_FRIENDLY_NAME: Final = "friendly_name"
+CONF_IR_BLASTER_DEVICE_ID: Final = "ir_blaster_device_id"
+CONF_IR_BLASTER_SELECTOR: Final = "ir_blaster"
 CONF_MQTT_TOPIC: Final = "mqtt_topic"
 CONF_SETUP_MODE: Final = "setup_mode"
 CONF_VIRTUAL_NAME: Final = "virtual_name"
@@ -42,6 +44,8 @@ CODEPACK_DEVICE_TYPES: Final = [
 SETUP_MODE_MANUAL: Final = "manual"
 SETUP_MODE_CODEPACK: Final = "codepack"
 SETUP_MODES: Final = [SETUP_MODE_MANUAL, SETUP_MODE_CODEPACK]
+
+MANUAL_IR_BLASTER_SELECTOR: Final = "__manual__"
 
 DEFAULT_COMMANDS: Final = {
     "power": "",

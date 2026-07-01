@@ -3,12 +3,19 @@
     "step": {
       "user": {
         "title": "Create virtual IR device",
-        "description": "Configure a local MQTT-backed infrared device.",
+        "description": "Configure a virtual device using a discovered Zigbee2MQTT IR blaster or a manual MQTT topic.",
         "data": {
           "virtual_name": "Virtual device name",
-          "friendly_name": "Zigbee2MQTT friendly name",
-          "mqtt_topic": "MQTT set topic",
+          "ir_blaster": "IR blaster",
           "setup_mode": "Setup mode"
+        }
+      },
+      "manual_transport": {
+        "title": "Manual MQTT topic",
+        "description": "Use this only when your Zigbee2MQTT IR blaster was not discovered.",
+        "data": {
+          "friendly_name": "Zigbee2MQTT friendly name",
+          "mqtt_topic": "MQTT set topic"
         },
         "data_description": {
           "friendly_name": "Used to build zigbee2mqtt/<friendly_name>/set when no explicit topic is provided.",
@@ -49,7 +56,8 @@
       }
     },
     "error": {
-      "friendly_name_or_topic_required": "Enter either a Zigbee2MQTT friendly name or an MQTT topic."
+      "friendly_name_or_topic_required": "Enter either a Zigbee2MQTT friendly name or an MQTT topic.",
+      "ir_blaster_not_found": "The selected IR blaster was not found. Refresh the flow and try again."
     },
     "abort": {
       "already_configured": "This IRBridge device is already configured.",
