@@ -18,7 +18,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .bridge import IRBridgeDevice
-from .codepacks import ClimateCodepack, load_codepack, parse_climate_codepack
+from .codepacks import ClimateCodepack, parse_climate_codepack
 from .codepacks import resolve_climate_command
 from .const import (
     CONF_CODEPACK_DEVICE_TYPE,
@@ -67,9 +67,10 @@ async def async_setup_entry(
         _LOGGER.warning("Skipping IRBridge climate entity with no codepack id")
         return
 
+    bridge_device: IRBridgeDevice = hass.data[DOMAIN][entry.entry_id]
     try:
         codepack_data = await hass.async_add_executor_job(
-            load_codepack, DEVICE_TYPE_CLIMATE, codepack_id
+            bridge_device.load_selected_codepack
         )
         climate_codepack = parse_climate_codepack(codepack_data)
     except HomeAssistantError:
@@ -80,7 +81,6 @@ async def async_setup_entry(
         )
         return
 
-    bridge_device: IRBridgeDevice = hass.data[DOMAIN][entry.entry_id]
     bridge_device._codepack_data = codepack_data
     try:
         climate_entity = IRBridgeClimateEntity(bridge_device, climate_codepack)

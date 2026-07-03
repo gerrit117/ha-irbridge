@@ -14,6 +14,8 @@ CONF_COMMANDS: Final = "commands"
 CONF_CODEPACK_DEVICE_TYPE: Final = "codepack_device_type"
 CONF_CODEPACK_ID: Final = "codepack_id"
 CONF_CODEPACK_MANUFACTURER: Final = "codepack_manufacturer"
+CONF_CODEPACK_PATH: Final = "codepack_path"
+CONF_CODEPACK_SOURCE: Final = "codepack_source"
 CONF_DEVICE_TYPE: Final = "device_type"
 CONF_FRIENDLY_NAME: Final = "friendly_name"
 CONF_IR_BLASTER_DEVICE_ID: Final = "ir_blaster_device_id"
@@ -40,6 +42,10 @@ CODEPACK_DEVICE_TYPES: Final = [
     DEVICE_TYPE_FAN,
     DEVICE_TYPE_LIGHT,
 ]
+
+CODEPACK_SOURCE_BUNDLED: Final = "bundled"
+CODEPACK_SOURCE_CUSTOM: Final = "custom"
+CUSTOM_CODEPACK_DIR: Final = "custom_codes"
 
 SETUP_MODE_MANUAL: Final = "manual"
 SETUP_MODE_CODEPACK: Final = "codepack"

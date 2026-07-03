@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import voluptuous as vol
@@ -9,12 +10,14 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.helpers import selector
 
-from .codepacks import CodepackInfo, build_codepack_index, discover_codepacks
+from .codepacks import CodepackInfo, build_codepack_index, discover_all_codepacks
 from .const import (
     CODEPACK_DEVICE_TYPES,
     CONF_CODEPACK_DEVICE_TYPE,
     CONF_CODEPACK_ID,
     CONF_CODEPACK_MANUFACTURER,
+    CONF_CODEPACK_PATH,
+    CONF_CODEPACK_SOURCE,
     CONF_COMMANDS,
     CONF_DEVICE_TYPE,
     CONF_FRIENDLY_NAME,
@@ -26,6 +29,7 @@ from .const import (
     DEFAULT_COMMANDS,
     DEVICE_TYPES,
     DOMAIN,
+    CUSTOM_CODEPACK_DIR,
     MANUAL_IR_BLASTER_SELECTOR,
     MQTT_TOPIC_TEMPLATE,
     SETUP_MODE_CODEPACK,
@@ -259,7 +263,7 @@ class IRBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         index = await self._async_get_codepack_index()
         codepacks = index[self._codepack_device_type][self._codepack_manufacturer]
         options = [
-            {"value": codepack.codepack_id, "label": codepack.label}
+            {"value": codepack.ref, "label": codepack.label}
             for codepack in codepacks
         ]
 
@@ -267,7 +271,7 @@ class IRBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             selected = next(
                 codepack
                 for codepack in codepacks
-                if codepack.codepack_id == user_input[CONF_CODEPACK_ID]
+                if codepack.ref == user_input[CONF_CODEPACK_ID]
             )
             data = {
                 **self._common_data,
@@ -275,6 +279,8 @@ class IRBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 CONF_CODEPACK_DEVICE_TYPE: selected.device_type,
                 CONF_CODEPACK_MANUFACTURER: selected.manufacturer,
                 CONF_CODEPACK_ID: selected.codepack_id,
+                CONF_CODEPACK_SOURCE: selected.source,
+                CONF_CODEPACK_PATH: selected.path,
             }
             return self.async_create_entry(
                 title=self._common_data[CONF_VIRTUAL_NAME],
@@ -300,7 +306,10 @@ class IRBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> dict[str, dict[str, list[CodepackInfo]]]:
         """Return the bundled codepack index."""
         if self._codepack_index is None:
-            codepacks = await self.hass.async_add_executor_job(discover_codepacks)
+            custom_root = self.hass.config.path(CUSTOM_CODEPACK_DIR)
+            codepacks = await self.hass.async_add_executor_job(
+                discover_all_codepacks, Path(custom_root)
+            )
             self._codepack_index = build_codepack_index(codepacks)
         return self._codepack_index
 

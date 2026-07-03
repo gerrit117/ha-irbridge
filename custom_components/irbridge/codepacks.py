@@ -11,7 +11,11 @@ from typing import Any
 
 from homeassistant.exceptions import HomeAssistantError
 
-from .const import CODEPACK_DEVICE_TYPES
+from .const import (
+    CODEPACK_DEVICE_TYPES,
+    CODEPACK_SOURCE_BUNDLED,
+    CODEPACK_SOURCE_CUSTOM,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -65,6 +69,7 @@ class CodepackInfo:
     device_type: str
     codepack_id: str
     path: str
+    source: str
     manufacturer: str
     supported_models: tuple[str, ...]
     commands_encoding: str
@@ -79,12 +84,13 @@ class CodepackInfo:
         """Return a human-readable codepack label."""
         models = ", ".join(self.supported_models) or "Unknown model"
         compatibility = f"{self.supported_controller} {self.commands_encoding}"
-        return f"{self.codepack_id}: {models} [{compatibility}]"
+        prefix = "Custom: " if self.source == CODEPACK_SOURCE_CUSTOM else ""
+        return f"{prefix}{self.manufacturer} {models} ({self.codepack_id}) [{compatibility}]"
 
     @property
     def ref(self) -> str:
         """Return the stable bundled codepack reference."""
-        return f"{self.device_type}/{self.codepack_id}"
+        return f"{self.source}:{self.path}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -206,7 +212,11 @@ def _load_json(path: Path) -> dict[str, Any]:
     return data
 
 
-def load_codepack_info(path: Path, root: Path = CODEPACKS_DIR) -> CodepackInfo | None:
+def load_codepack_info(
+    path: Path,
+    root: Path = CODEPACKS_DIR,
+    source: str = CODEPACK_SOURCE_BUNDLED,
+) -> CodepackInfo | None:
     """Load and validate metadata for one codepack."""
     try:
         device_type = path.relative_to(root).parts[0]
@@ -241,6 +251,7 @@ def load_codepack_info(path: Path, root: Path = CODEPACKS_DIR) -> CodepackInfo |
         device_type=device_type,
         codepack_id=path.stem,
         path=str(path.relative_to(root)),
+        source=source,
         manufacturer=manufacturer,
         supported_models=normalized_models,
         commands_encoding=commands_encoding,
@@ -252,17 +263,49 @@ def load_codepack_info(path: Path, root: Path = CODEPACKS_DIR) -> CodepackInfo |
     )
 
 
-def discover_codepacks(root: Path = CODEPACKS_DIR) -> list[CodepackInfo]:
-    """Discover bundled valid codepacks."""
+def discover_codepacks(
+    root: Path = CODEPACKS_DIR,
+    source: str = CODEPACK_SOURCE_BUNDLED,
+) -> list[CodepackInfo]:
+    """Discover valid codepacks from one root."""
     if not root.exists():
         return []
 
     codepacks: list[CodepackInfo] = []
     for path in sorted(root.rglob("*.json")):
-        codepack = load_codepack_info(path, root)
+        codepack = load_codepack_info(path, root, source)
         if codepack is not None:
             codepacks.append(codepack)
     return codepacks
+
+
+def discover_all_codepacks(custom_root: Path | None = None) -> list[CodepackInfo]:
+    """Discover bundled and optional custom codepacks."""
+    bundled = discover_codepacks(CODEPACKS_DIR, CODEPACK_SOURCE_BUNDLED)
+    custom = (
+        discover_codepacks(custom_root, CODEPACK_SOURCE_CUSTOM)
+        if custom_root is not None
+        else []
+    )
+    if not custom:
+        return bundled
+
+    by_identity = {
+        _codepack_identity(codepack): codepack
+        for codepack in bundled
+    }
+    for codepack in custom:
+        by_identity[_codepack_identity(codepack)] = codepack
+    return sorted(by_identity.values(), key=lambda codepack: codepack.label.lower())
+
+
+def _codepack_identity(codepack: CodepackInfo) -> tuple[str, str, tuple[str, ...]]:
+    """Return identity used for custom-over-bundled replacement."""
+    return (
+        codepack.device_type,
+        codepack.manufacturer.strip().lower(),
+        tuple(model.strip().lower() for model in codepack.supported_models),
+    )
 
 
 def build_codepack_index(
@@ -279,11 +322,28 @@ def build_codepack_index(
     return index
 
 
-def load_codepack(device_type: str, codepack_id: str) -> dict[str, Any]:
-    """Load one bundled codepack by type and id."""
-    path = CODEPACKS_DIR / device_type / f"{codepack_id}.json"
+def load_codepack(
+    device_type: str,
+    codepack_id: str,
+    *,
+    source: str = CODEPACK_SOURCE_BUNDLED,
+    codepack_path: str | None = None,
+    custom_root: Path | None = None,
+) -> dict[str, Any]:
+    """Load one bundled or custom codepack."""
+    root = custom_root if source == CODEPACK_SOURCE_CUSTOM else CODEPACKS_DIR
+    if root is None:
+        raise HomeAssistantError("Custom codepack root is not available")
+    relative_path = Path(codepack_path or f"{device_type}/{codepack_id}.json")
+    path = root / relative_path
+    try:
+        path.resolve().relative_to(root.resolve())
+    except ValueError as err:
+        raise HomeAssistantError("Codepack path escapes the configured root") from err
     if not is_codepack_path(path) or not path.is_file():
-        raise HomeAssistantError(f"Codepack '{device_type}/{codepack_id}' was not found")
+        raise HomeAssistantError(
+            f"Codepack '{source}:{device_type}/{codepack_id}' was not found"
+        )
 
     try:
         data = _load_json(path)

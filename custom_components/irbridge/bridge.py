@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from homeassistant.components import mqtt
@@ -15,12 +16,17 @@ from homeassistant.exceptions import HomeAssistantError
 from .const import (
     CONF_CODEPACK_DEVICE_TYPE,
     CONF_CODEPACK_ID,
+    CONF_CODEPACK_PATH,
+    CONF_CODEPACK_SOURCE,
     CONF_COMMANDS,
     CONF_DEVICE_TYPE,
     CONF_FRIENDLY_NAME,
     CONF_MQTT_TOPIC,
     CONF_SETUP_MODE,
     CONF_VIRTUAL_NAME,
+    CODEPACK_SOURCE_BUNDLED,
+    CODEPACK_SOURCE_CUSTOM,
+    CUSTOM_CODEPACK_DIR,
     DEFAULT_COMMANDS,
     DOMAIN,
     MQTT_PAYLOAD_KEY,
@@ -71,6 +77,16 @@ class IRBridgeDevice:
         return self.entry.data.get(CONF_CODEPACK_DEVICE_TYPE, self.device_type)
 
     @property
+    def codepack_source(self) -> str:
+        """Return the selected codepack source."""
+        return self.entry.data.get(CONF_CODEPACK_SOURCE, CODEPACK_SOURCE_BUNDLED)
+
+    @property
+    def codepack_path(self) -> str | None:
+        """Return the selected codepack relative path."""
+        return self.entry.data.get(CONF_CODEPACK_PATH)
+
+    @property
     def topic(self) -> str:
         """Return the MQTT set topic."""
         configured_topic = self.entry.data.get(CONF_MQTT_TOPIC)
@@ -102,7 +118,7 @@ class IRBridgeDevice:
         data = self._codepack_data
         if data is None:
             try:
-                data = load_codepack(codepack_type, codepack_id)
+                data = self.load_selected_codepack()
             except HomeAssistantError:
                 return ()
             self._codepack_data = data
@@ -130,7 +146,7 @@ class IRBridgeDevice:
         if self._codepack_data is None:
             try:
                 self._codepack_data = await self.hass.async_add_executor_job(
-                    load_codepack, codepack_type, codepack_id
+                    self.load_selected_codepack
                 )
             except HomeAssistantError:
                 return ()
@@ -159,7 +175,7 @@ class IRBridgeDevice:
 
             if self._codepack_data is None:
                 self._codepack_data = await self.hass.async_add_executor_job(
-                    load_codepack, codepack_type, codepack_id
+                    self.load_selected_codepack
                 )
 
             stored_code = resolve_codepack_command(
@@ -184,6 +200,25 @@ class IRBridgeDevice:
                 f"Command '{normalized_command}' is not configured for {self.name}"
             )
         return stored_code
+
+    def load_selected_codepack(self) -> dict[str, Any]:
+        """Load this entry's selected codepack."""
+        codepack_id = self.entry.data.get(CONF_CODEPACK_ID)
+        codepack_type = self.entry.data.get(CONF_CODEPACK_DEVICE_TYPE)
+        if not codepack_id or not codepack_type:
+            raise HomeAssistantError(f"No codepack is configured for {self.name}")
+        custom_root = (
+            Path(self.hass.config.path(CUSTOM_CODEPACK_DIR))
+            if self.codepack_source == CODEPACK_SOURCE_CUSTOM
+            else None
+        )
+        return load_codepack(
+            codepack_type,
+            codepack_id,
+            source=self.codepack_source,
+            codepack_path=self.codepack_path,
+            custom_root=custom_root,
+        )
 
     async def async_build_payload(self, command: str) -> str:
         """Build the MQTT payload for a command."""

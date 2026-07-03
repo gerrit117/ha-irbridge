@@ -34,22 +34,22 @@
         }
       },
       "codepack_type": {
-        "title": "Bundled codepack type",
-        "description": "Choose the type of bundled SmartIR-compatible codepack to use.",
+        "title": "Codepack type",
+        "description": "Choose the type of SmartIR-compatible codepack to use.",
         "data": {
           "codepack_device_type": "Device type"
         }
       },
       "codepack_manufacturer": {
-        "title": "Bundled codepack manufacturer",
-        "description": "Choose the manufacturer from bundled codepacks.",
+        "title": "Codepack manufacturer",
+        "description": "Choose the manufacturer from bundled and custom codepacks.",
         "data": {
           "codepack_manufacturer": "Manufacturer"
         }
       },
       "codepack_model": {
-        "title": "Bundled codepack model",
-        "description": "Choose the SmartIR-compatible code ID/model.",
+        "title": "Codepack model",
+        "description": "Choose the SmartIR-compatible codepack. Custom codepacks are marked as Custom.",
         "data": {
           "codepack_id": "Model/code ID"
         }
