@@ -10,9 +10,7 @@ Many IR-controlled devices still work well, but their original remotes are awkwa
 
 You can start with manual commands, select bundled SmartIR-compatible codepacks, or add your own custom SmartIR-style JSON files without editing IRBridge source files.
 
-## IRBridge vs SmartIR
-
-SmartIR is primarily a ready-made database and entity integration for known IR devices.
+## How it works
 
 IRBridge focuses on the transport and workflow around local IR blasters:
 
@@ -24,18 +22,6 @@ IRBridge focuses on the transport and workflow around local IR blasters:
 - future IR learning, import, export, and conversion workflows
 
 IRBridge includes and builds upon SmartIR-style code definitions, but it is not a drop-in replacement for every SmartIR feature.
-
-## Integration vs Add-on
-
-IRBridge is not a Home Assistant add-on. It does not run a separate container or service.
-
-IRBridge is a custom integration installed under:
-
-```text
-custom_components/irbridge/
-```
-
-It loads inside Home Assistant and uses the existing MQTT integration to publish IR commands.
 
 ## Supported Backends
 
@@ -344,35 +330,6 @@ Submitted codes should be tested on real hardware whenever possible.
 - Converting Broadlink/LIRC/Pronto/Tuya/ESPHome/Zigbee2MQTT formats where possible
 - Community codepack review and sharing workflow
 
-## Roadmap
-
-### Phase 1
-
-- Zigbee2MQTT TS1201/ZS06/UFO-R11 support
-- Generic remote/button devices
-- Manual command mapping
-
-### Phase 2
-
-- Custom codepack workflow
-- IR learning support
-- Command testing UI
-- Import/export code packs
-
-### Phase 3
-
-- ClimateEntity support
-- MediaPlayerEntity support
-- FanEntity support
-- LightEntity support
-- Switch/Button fallback entities
-
-### Phase 4
-
-- SmartIR importer
-- LIRC/Pronto/Broadlink/Tuya converters
-- Community code packs
-- Home Assistant native IR backend support
 
 ## Acknowledgements
 
