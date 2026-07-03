@@ -41,7 +41,7 @@ COMPATIBILITY_TYPE_Z2M_BASE64 = "z2m_base64"
 COMPATIBILITY_TYPE_ESPHOME_RAW = "esphome_raw"
 
 COMMAND_ALIASES: dict[str, tuple[str, ...]] = {
-    "power": ("power", "on", "off"),
+    "power": ("power", "Power", "toggle", "on", "off"),
     "on": ("on", "power"),
     "off": ("off", "power"),
     "volume_up": ("volumeUp", "volume_up"),
@@ -51,6 +51,23 @@ COMMAND_ALIASES: dict[str, tuple[str, ...]] = {
     "volumedown": ("volumeDown", "volume_down"),
     "volumeDown": ("volumeDown", "volume_down"),
     "mute": ("mute",),
+    "play": ("play", "Play", "playPause", "play_pause"),
+    "pause": ("pause", "Pause", "playPause", "play_pause"),
+    "stop": ("stop", "Stop"),
+    "next": ("next", "Next", "nextTrack", "next_track", "nextChannel"),
+    "previous": (
+        "previous",
+        "Previous",
+        "previousTrack",
+        "previous_track",
+        "previousChannel",
+    ),
+    "channel_up": ("channelUp", "nextChannel"),
+    "channel_down": ("channelDown", "previousChannel"),
+    "brighten": ("brighten", "brightnessUp", "brightness_up"),
+    "dim": ("dim", "brightnessDown", "brightness_down"),
+    "warmer": ("warmer", "warm"),
+    "colder": ("colder", "cool"),
 }
 
 CLIMATE_MODE_ALIASES: dict[str, tuple[str, ...]] = {
